@@ -1,3 +1,17 @@
+import { generateObject } from "ai";
+import { z } from "zod";
+
+import { geminiFlashModel } from ".";
+
+const airportSchema = z.object({
+  cityName: z.string(),
+  airportCode: z.string().length(3),
+  airportName: z.string(),
+  timestamp: z.string(),
+  terminal: z.string(),
+  gate: z.string(),
+});
+
 export async function generateSampleFlightStatus({
   flightNumber,
   date,
@@ -5,27 +19,18 @@ export async function generateSampleFlightStatus({
   flightNumber: string;
   date: string;
 }) {
-  return {
-    flightNumber,
-    date,
-    departure: {
-      cityName: "London",
-      airportCode: "LHR",
-      airportName: "London Heathrow Airport",
-      timestamp: "2026-09-05T18:30:00Z",
-      terminal: "5",
-      gate: "A10",
-    },
-    arrival: {
-      cityName: "New York",
-      airportCode: "JFK",
-      airportName: "John F. Kennedy International Airport",
-      timestamp: "2026-09-06T07:30:00Z",
-      terminal: "7",
-      gate: "B22",
-    },
-    totalDistanceInMiles: 3450,
-  };
+  const { object } = await generateObject({
+    model: geminiFlashModel,
+    prompt: `Return realistic flight status data for flight ${flightNumber} on ${date}. Use the requested flight number exactly. Return only data matching the schema.`,
+    schema: z.object({
+      flightNumber: z.string(),
+      departure: airportSchema,
+      arrival: airportSchema,
+      totalDistanceInMiles: z.number().positive(),
+    }),
+  });
+
+  return { ...object, flightNumber };
 }
 
 export async function generateSampleFlightSearchResults({
@@ -35,35 +40,37 @@ export async function generateSampleFlightSearchResults({
   origin: string;
   destination: string;
 }) {
-  const departure = origin.trim() || "San Francisco";
-  const arrival = destination.trim() || "London";
-  const options = [
-    ["result_1", "UA184", ["United Airlines", "Lufthansa"], 1200.5, 1],
-    ["result_2", "BA142", ["British Airways"], 1350, 0],
-    ["result_3", "DL401", ["Delta Air Lines", "Air France"], 1150.75, 1],
-    ["result_4", "AA207", ["American Airlines", "Iberia"], 1250.25, 1],
-  ] as const;
+  const { object } = await generateObject({
+    model: geminiFlashModel,
+    prompt: `Generate exactly 4 realistic flight search results from ${origin} to ${destination}. Every result must include a real-looking airline flight number such as BA142 or DL401. Do not use internal IDs like result_1. Use ISO timestamps and IATA airport codes.`,
+    output: "array",
+    schema: z.object({
+      id: z.string().describe("Internal unique result ID"),
+      flightNumber: z
+        .string()
+        .regex(/^[A-Z]{2,3}[0-9]{1,4}$/)
+        .describe("Airline flight number, never result_1 or similar"),
+      departure: z.object({
+        cityName: z.string(),
+        airportCode: z.string().length(3),
+        timestamp: z.string(),
+      }),
+      arrival: z.object({
+        cityName: z.string(),
+        airportCode: z.string().length(3),
+        timestamp: z.string(),
+      }),
+      airlines: z.array(z.string()).min(1),
+      priceInUSD: z.number().positive(),
+      numberOfStops: z.number().int().min(0).max(3),
+    }),
+  });
 
   return {
-    flights: options.map(
-      ([id, flightNumber, airlines, priceInUSD, numberOfStops], index) => ({
-        id,
-        flightNumber,
-        departure: {
-          cityName: departure,
-          airportCode: "DEP",
-          timestamp: `2026-09-${String(10 + index).padStart(2, "0")}T16:30:00Z`,
-        },
-        arrival: {
-          cityName: arrival,
-          airportCode: "DST",
-          timestamp: `2026-09-${String(11 + index).padStart(2, "0")}T13:50:00Z`,
-        },
-        airlines,
-        priceInUSD,
-        numberOfStops,
-      }),
-    ),
+    flights: object.map((flight, index) => ({
+      ...flight,
+      id: flight.id.startsWith("result_") ? `flight_${index + 1}` : flight.id,
+    })),
   };
 }
 
@@ -72,20 +79,24 @@ export async function generateSampleSeatSelection({
 }: {
   flightNumber: string;
 }) {
-  const seats = Array.from({ length: 5 }, (_, rowIndex) =>
-    Array.from({ length: 6 }, (_, seatIndex) => {
-      const row = rowIndex + 1;
-      const column = String.fromCharCode(65 + seatIndex);
-
-      return {
-        seatNumber: `${row}${column}`,
-        priceInUSD: row === 1 ? 55 : 25,
-        isAvailable: (rowIndex * 6 + seatIndex) % 5 !== 0,
-      };
+  const { object } = await generateObject({
+    model: geminiFlashModel,
+    prompt: `Generate exactly 30 seat availability records for flight ${flightNumber}: rows 1 through 5, seats A through F. Include realistic prices and availability. Return only the array.`,
+    output: "array",
+    schema: z.object({
+      seatNumber: z.string().regex(/^[1-5][A-F]$/),
+      priceInUSD: z.number().positive().max(99),
+      isAvailable: z.boolean(),
     }),
+  });
+
+  const rows = Array.from({ length: 5 }, (_, rowIndex) =>
+    object
+      .filter((seat) => seat.seatNumber.startsWith(String(rowIndex + 1)))
+      .sort((a, b) => a.seatNumber.localeCompare(b.seatNumber)),
   );
 
-  return { flightNumber, seats };
+  return { flightNumber, seats: rows };
 }
 
 export async function generateReservationPrice(props: {
@@ -107,7 +118,13 @@ export async function generateReservationPrice(props: {
   };
   passengerName: string;
 }) {
-  return {
-    totalPriceInUSD: 450 + props.seats.length * 25,
-  };
+  const { object } = await generateObject({
+    model: geminiFlashModel,
+    prompt: `Calculate a realistic total price in USD for this flight reservation. Use the exact flight number ${props.flightNumber} and selected seats ${props.seats.join(", ")}. Return only the total price.`,
+    schema: z.object({
+      totalPriceInUSD: z.number().positive(),
+    }),
+  });
+
+  return object;
 }

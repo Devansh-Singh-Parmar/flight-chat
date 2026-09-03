@@ -1,8 +1,18 @@
 "use client";
 
-import type { Attachment, ChatRequestOptions, CreateMessage, Message } from "ai";
+import type {
+  Attachment,
+  ChatRequestOptions,
+  CreateMessage,
+  Message,
+} from "ai";
 import { PaperclipIcon, ArrowUpIcon, StopCircleIcon } from "lucide-react";
-import { type ChangeEvent, type Dispatch, type SetStateAction, useRef } from "react";
+import {
+  type ChangeEvent,
+  type Dispatch,
+  type SetStateAction,
+  useRef,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +33,6 @@ const suggestedActions = [
 export function MultimodalInput({
   input,
   setInput,
-  handleSubmit,
   isLoading,
   stop,
   attachments,
@@ -33,27 +42,34 @@ export function MultimodalInput({
 }: {
   input: string;
   setInput: (value: string) => void;
-  handleSubmit: (event?: { preventDefault?: () => void }, options?: ChatRequestOptions) => void;
   isLoading: boolean;
   stop: () => void;
   attachments: Array<Attachment>;
   setAttachments: Dispatch<SetStateAction<Array<Attachment>>>;
   messages: Array<Message>;
-  append: (message: Message | CreateMessage, options?: ChatRequestOptions) => Promise<string | null | undefined>;
+  append: (
+    message: Message | CreateMessage,
+    options?: ChatRequestOptions,
+  ) => Promise<string | null | undefined>;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    const uploaded: Array<Attachment | undefined> = await Promise.all(files.map(async (file): Promise<Attachment | undefined> => {
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/files/upload", { method: "POST", body: formData });
-      if (!response.ok) return undefined;
-      const { url, pathname, contentType } = await response.json();
-      return { url, name: pathname, contentType };
-    }));
+    const uploaded: Array<Attachment | undefined> = await Promise.all(
+      files.map(async (file): Promise<Attachment | undefined> => {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/files/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!response.ok) return undefined;
+        const { url, pathname, contentType } = await response.json();
+        return { url, name: pathname, contentType };
+      }),
+    );
     setAttachments((current) => [
       ...current,
       ...uploaded.filter((item): item is Attachment => item !== undefined),
@@ -69,73 +85,83 @@ export function MultimodalInput({
               key={suggestedAction.title}
               type="button"
               className="rounded-lg border border-zinc-200 bg-muted/50 p-3 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              onClick={() => append({ role: "user", content: suggestedAction.action })}
+              onClick={() =>
+                append({ role: "user", content: suggestedAction.action })
+              }
             >
               <span className="block font-medium">{suggestedAction.title}</span>
-              <span className="text-zinc-500 dark:text-zinc-400">{suggestedAction.label}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">
+                {suggestedAction.label}
+              </span>
             </button>
           ))}
         </div>
       )}
       <div className="rounded-2xl border border-border bg-background p-2 shadow-sm">
-      {attachments.length > 0 ? (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {attachments.map((attachment, index) => (
-            <div
-              key={`${attachment.name ?? "attachment"}-${index}`}
-              className="rounded-md border border-border bg-muted px-2 py-1 text-xs"
-            >
-              {attachment.name ?? "attachment"}
-            </div>
-          ))}
-        </div>
-      ) : null}
+        {attachments.length > 0 ? (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {attachments.map((attachment, index) => (
+              <div
+                key={`${attachment.name ?? "attachment"}-${index}`}
+                className="rounded-md border border-border bg-muted px-2 py-1 text-xs"
+              >
+                {attachment.name ?? "attachment"}
+              </div>
+            ))}
+          </div>
+        ) : null}
 
-      <form
-        className="flex items-center gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!input.trim()) return;
-          handleSubmit(event, { experimental_attachments: attachments });
-          setAttachments([]);
-        }}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          multiple
-          onChange={onFileChange}
-        />
+        <form
+          className="flex items-center gap-2"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const value = input.trim();
+            if (!value || isLoading) return;
 
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => fileInputRef.current?.click()}
-          aria-label="Attach files"
+            await append(
+              { role: "user", content: value },
+              { experimental_attachments: attachments },
+            );
+            setInput("");
+            setAttachments([]);
+          }}
         >
-          <PaperclipIcon className="h-4 w-4" />
-        </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            multiple
+            onChange={onFileChange}
+          />
 
-        <Input
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Send a message"
-          className="border-0 bg-transparent shadow-none focus-visible:ring-0"
-        />
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="Attach files"
+          >
+            <PaperclipIcon className="h-4 w-4" />
+          </Button>
 
-        {isLoading ? (
-          <Button type="button" variant="outline" onClick={stop}>
-            <StopCircleIcon className="mr-2 h-4 w-4" />
-            Stop
-          </Button>
-        ) : (
-          <Button type="submit" size="icon">
-            <ArrowUpIcon className="h-4 w-4" />
-          </Button>
-        )}
-      </form>
+          <Input
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Send a message"
+            className="border-0 bg-transparent shadow-none focus-visible:ring-0"
+          />
+
+          {isLoading ? (
+            <Button type="button" variant="outline" onClick={stop}>
+              <StopCircleIcon className="mr-2 h-4 w-4" />
+              Stop
+            </Button>
+          ) : (
+            <Button type="submit" size="icon">
+              <ArrowUpIcon className="h-4 w-4" />
+            </Button>
+          )}
+        </form>
       </div>
     </div>
   );

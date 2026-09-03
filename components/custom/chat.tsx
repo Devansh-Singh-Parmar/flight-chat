@@ -17,16 +17,15 @@ export function Chat({
   id: string;
   initialMessages: Array<Message>;
 }) {
-  const { messages, handleSubmit, input, setInput, append, isLoading, stop } =
-    useChat({
-      id,
-      body: { id },
-      initialMessages,
-      maxSteps: 10,
-      onFinish: () => {
-        window.history.replaceState({}, "", `/chat/${id}`);
-      },
-    });
+  const { messages, input, setInput, append, isLoading, stop } = useChat({
+    id,
+    body: { id },
+    initialMessages,
+    maxSteps: 10,
+    onFinish: () => {
+      window.history.replaceState({}, "", `/chat/${id}`);
+    },
+  });
 
   const [messagesContainerRef, messagesEndRef] =
     useScrollToBottom<HTMLDivElement>();
@@ -64,7 +63,6 @@ export function Chat({
           <MultimodalInput
             input={input}
             setInput={setInput}
-            handleSubmit={handleSubmit}
             isLoading={isLoading}
             stop={stop}
             attachments={attachments}

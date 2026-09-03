@@ -101,9 +101,9 @@ export const Message = ({
                 ) : toolName === "displayFlightStatus" ? (
                   <FlightStatus />
                 ) : toolName === "searchFlights" ? (
-                  <ListFlights chatId={chatId} append={append} />
+                  <div className="skeleton rounded-lg bg-muted h-24 w-full" />
                 ) : toolName === "selectSeats" ? (
-                  <SelectSeats chatId={chatId} append={append} />
+                  <div className="skeleton rounded-lg bg-muted h-64 w-full" />
                 ) : toolName === "createReservation" ? (
                   <CreateReservation />
                 ) : toolName === "authorizePayment" ? (
