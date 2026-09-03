@@ -1,62 +1,61 @@
-import type { Attachment, ToolInvocation } from "ai";
+"use client";
 
-import { cn } from "@/lib/utils";
+import { Attachment, ToolInvocation } from "ai";
+import { motion } from "framer-motion";
+import { ReactNode } from "react";
+import { Streamdown } from "streamdown";
 
-export function Message({
-  chatId,
-  role,
-  content,
-  attachments,
-  toolInvocations,
-}: {
+import { BotIcon, UserIcon } from "./icons";
+import { PreviewAttachment } from "./preview-attachment";
+import { Weather } from "./weather";
+import { AuthorizePayment } from "../flights/authorize-payment";
+import { DisplayBoardingPass } from "../flights/boarding-pass";
+import { CreateReservation } from "../flights/create-reservation";
+import { FlightStatus } from "../flights/flight-status";
+import { ListFlights } from "../flights/list-flights";
+import { SelectSeats } from "../flights/select-seats";
+import { VerifyPayment } from "../flights/verify-payment";
+
+export const Message = ({ chatId, role, content, toolInvocations, attachments }: {
   chatId: string;
-  role: "user" | "assistant" | "system" | "tool" | "function" | "data";
-  content: string;
+  role: string;
+  content: string | ReactNode;
+  toolInvocations: Array<ToolInvocation> | undefined;
   attachments?: Array<Attachment>;
-  toolInvocations?: Array<ToolInvocation>;
-}) {
-  const isUser = role === "user";
-
-  return (
-    <div
-      className={cn(
-        "w-full max-w-[720px] px-4 md:px-0",
-        isUser ? "flex justify-end" : "flex justify-start",
-      )}
-    >
-      <div
-        className={cn(
-          "rounded-2xl border px-4 py-3 text-sm shadow-sm",
-          isUser
-            ? "bg-primary text-primary-foreground border-primary"
-            : "bg-muted/70 text-foreground border-border",
-        )}
-      >
-        {attachments && attachments.length > 0 ? (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {attachments.map((attachment, index) => (
-              <div
-                key={`${attachment.name ?? "file"}-${index}`}
-                className="rounded-md border border-border bg-background/50 px-2 py-1 text-xs"
-              >
-                {attachment.name ?? "attachment"}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {toolInvocations && toolInvocations.length > 0 ? (
-          <div className="mb-2 space-y-1 text-xs opacity-80">
-            {toolInvocations.map((toolInvocation, index) => (
-              <div key={`${toolInvocation.toolCallId ?? "tool"}-${index}`}>
-                {toolInvocation.toolName}: {toolInvocation.state}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="whitespace-pre-wrap break-words">{content}</div>
-      </div>
+}) => (
+  <motion.div className="flex flex-row gap-4 px-4 w-full md:w-[500px] md:px-0 first-of-type:pt-20" initial={{ y: 5, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+    <div className="size-[24px] border rounded-sm p-1 flex flex-col justify-center items-center shrink-0 text-zinc-500">
+      {role === "assistant" ? <BotIcon /> : <UserIcon />}
     </div>
-  );
-}
+    <div className="flex flex-col gap-2 w-full">
+      {content && typeof content === "string" && <div className="text-zinc-800 dark:text-zinc-300 flex flex-col gap-4"><Streamdown>{content}</Streamdown></div>}
+      {toolInvocations && <div className="flex flex-col gap-4">{toolInvocations.map((toolInvocation) => {
+        const { toolName, toolCallId, state } = toolInvocation;
+        if (state === "result") {
+          const { result } = toolInvocation;
+          return <div key={toolCallId}>
+            {toolName === "getWeather" ? <Weather weatherAtLocation={result} />
+              : toolName === "displayFlightStatus" ? <FlightStatus flightStatus={result} />
+              : toolName === "searchFlights" ? <ListFlights chatId={chatId} results={result} />
+              : toolName === "selectSeats" ? <SelectSeats chatId={chatId} availability={result} />
+              : toolName === "createReservation" ? (Object.keys(result).includes("error") ? null : <CreateReservation reservation={result} />)
+              : toolName === "authorizePayment" ? <AuthorizePayment intent={result} />
+              : toolName === "displayBoardingPass" ? <DisplayBoardingPass boardingPass={result} />
+              : toolName === "verifyPayment" ? <VerifyPayment result={result} />
+              : <div>{JSON.stringify(result, null, 2)}</div>}
+          </div>;
+        }
+        return <div key={toolCallId} className="skeleton">
+          {toolName === "getWeather" ? <Weather />
+            : toolName === "displayFlightStatus" ? <FlightStatus />
+            : toolName === "searchFlights" ? <ListFlights chatId={chatId} />
+            : toolName === "selectSeats" ? <SelectSeats chatId={chatId} />
+            : toolName === "createReservation" ? <CreateReservation />
+            : toolName === "authorizePayment" ? <AuthorizePayment />
+            : toolName === "displayBoardingPass" ? <DisplayBoardingPass /> : null}
+        </div>;
+      })}</div>}
+      {attachments && <div className="flex flex-row gap-2">{attachments.map((attachment) => <PreviewAttachment key={attachment.url} attachment={attachment} />)}</div>}
+    </div>
+  </motion.div>
+);

@@ -1,8 +1,3 @@
-import { generateObject } from "ai";
-import { z } from "zod";
-
-import { geminiFlashModel } from ".";
-
 export async function generateSampleFlightStatus({
   flightNumber,
   date,
@@ -10,33 +5,27 @@ export async function generateSampleFlightStatus({
   flightNumber: string;
   date: string;
 }) {
-  const { object: flightStatus } = await generateObject({
-    model: geminiFlashModel,
-    prompt: `Flight status for flight number ${flightNumber} on ${date}.`,
-    schema: z.object({
-      flightNumber: z.string().describe("Flight number, e.g., BA123, AA31"),
-      departure: z.object({
-        cityName: z.string().describe("Name of the departure city"),
-        airportCode: z.string().describe("IATA code of the departure airport"),
-        airportName: z.string().describe("full name of the departure airport"),
-        timestamp: z.string().describe("ISO 8061 departure date and time"),
-        terminal: z.string().describe("Departure terminal"),
-        gate: z.string().describe("Departure gate"),
-      }),
-      arrival: z.object({
-        cityName: z.string().describe("Name of the arrival city"),
-        airportCode: z.string().describe("IATA code of the arrival airport"),
-        airportName: z.string().describe("Full name of the arrival airport"),
-        timestamp: z.string().describe("ISO 8061 arrival date and time"),
-        terminal: z.string().describe("Arrival terminal"),
-        gate: z.string().describe("Arrival gate"),
-      }),
-      totalDistanceInMiles: z
-        .number()
-        .describe("Total distance of the flight in miles"),
-    }),
-  });
-  return flightStatus;
+  return {
+    flightNumber,
+    date,
+    departure: {
+      cityName: "London",
+      airportCode: "LHR",
+      airportName: "London Heathrow Airport",
+      timestamp: "2026-09-05T18:30:00Z",
+      terminal: "5",
+      gate: "A10",
+    },
+    arrival: {
+      cityName: "New York",
+      airportCode: "JFK",
+      airportName: "John F. Kennedy International Airport",
+      timestamp: "2026-09-06T07:30:00Z",
+      terminal: "7",
+      gate: "B22",
+    },
+    totalDistanceInMiles: 3450,
+  };
 }
 
 export async function generateSampleFlightSearchResults({
@@ -46,33 +35,36 @@ export async function generateSampleFlightSearchResults({
   origin: string;
   destination: string;
 }) {
-  const { object: flightSearchResults } = await generateObject({
-    model: geminiFlashModel,
-    prompt: `Generate search results for flights from ${origin} to ${destination}, limit to 4 results`,
-    output: "array",
-    schema: z.object({
-      id: z
-        .string()
-        .describe("Unique identifier for the flight, like BA123, AA31, etc."),
-      departure: z.object({
-        cityName: z.string().describe("Name of the departure city"),
-        airportCode: z.string().describe("IATA code of the departure airport"),
-        timestamp: z.string().describe("ISO 8601 departure date and time"),
-      }),
-      arrival: z.object({
-        cityName: z.string().describe("Name of the arrival city"),
-        airportCode: z.string().describe("IATA code of the arrival airport"),
-        timestamp: z.string().describe("ISO 8601 arrival date and time"),
-      }),
-      airlines: z.array(
-        z.string().describe("Airline names, e.g., American Airlines, Emirates"),
-      ),
-      priceInUSD: z.number().describe("Flight price in US dollars"),
-      numberOfStops: z.number().describe("Number of stops during the flight"),
-    }),
-  });
+  const departure = origin.trim() || "San Francisco";
+  const arrival = destination.trim() || "London";
+  const options = [
+    ["result_1", "UA184", ["United Airlines", "Lufthansa"], 1200.5, 1],
+    ["result_2", "BA142", ["British Airways"], 1350, 0],
+    ["result_3", "DL401", ["Delta Air Lines", "Air France"], 1150.75, 1],
+    ["result_4", "AA207", ["American Airlines", "Iberia"], 1250.25, 1],
+  ] as const;
 
-  return { flights: flightSearchResults };
+  return {
+    flights: options.map(
+      ([id, flightNumber, airlines, priceInUSD, numberOfStops], index) => ({
+        id,
+        flightNumber,
+        departure: {
+          cityName: departure,
+          airportCode: "DEP",
+          timestamp: `2026-09-${String(10 + index).padStart(2, "0")}T16:30:00Z`,
+        },
+        arrival: {
+          cityName: arrival,
+          airportCode: "DST",
+          timestamp: `2026-09-${String(11 + index).padStart(2, "0")}T13:50:00Z`,
+        },
+        airlines,
+        priceInUSD,
+        numberOfStops,
+      }),
+    ),
+  };
 }
 
 export async function generateSampleSeatSelection({
@@ -80,24 +72,22 @@ export async function generateSampleSeatSelection({
 }: {
   flightNumber: string;
 }) {
-  const { object: rows } = await generateObject({
-    model: geminiFlashModel,
-    prompt: `Simulate available seats for flight number ${flightNumber}, 6 seats on each row and 5 rows in total, adjust pricing based on location of seat`,
-    output: "array",
-    schema: z.array(
-      z.object({
-        seatNumber: z.string().describe("Seat identifier, eg: 12A, 15B"),
-        priceInUSD: z
-          .number()
-          .describe("Seat price in US dollars, less than $99"),
-        isAvailable: z
-          .boolean()
-          .describe("Weather the seat is available for booking"),
-      }),
-    ),
-  });
-  return { seats: rows };
+  const seats = Array.from({ length: 5 }, (_, rowIndex) =>
+    Array.from({ length: 6 }, (_, seatIndex) => {
+      const row = rowIndex + 1;
+      const column = String.fromCharCode(65 + seatIndex);
+
+      return {
+        seatNumber: `${row}${column}`,
+        priceInUSD: row === 1 ? 55 : 25,
+        isAvailable: (rowIndex * 6 + seatIndex) % 5 !== 0,
+      };
+    }),
+  );
+
+  return { flightNumber, seats };
 }
+
 export async function generateReservationPrice(props: {
   seats: string[];
   flightNumber: string;
@@ -117,14 +107,7 @@ export async function generateReservationPrice(props: {
   };
   passengerName: string;
 }) {
-  const { object: reservation } = await generateObject({
-    model: geminiFlashModel,
-    prompt: `Generate price for the following reservation \n\n ${JSON.stringify(props, null, 2)}`,
-    schema: z.object({
-      totalPriceInUSD: z
-        .number()
-        .describe("Total reservation price in US dollars"),
-    }),
-  });
-  return reservation;
+  return {
+    totalPriceInUSD: 450 + props.seats.length * 25,
+  };
 }

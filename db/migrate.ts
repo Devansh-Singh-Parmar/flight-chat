@@ -35,19 +35,25 @@ const runMigrate = async () => {
   const connectionString = databaseUrl.includes("sslmode=")
     ? databaseUrl
     : `${databaseUrl}${databaseUrl.includes("?") ? "&" : "?"}sslmode=require`;
+
   const connection = postgres(connectionString, { max: 1 });
   const db = drizzle(connection);
 
-  console.log("Running migrations...");
+  console.log("⏳ Running migrations...");
 
-  const start = Date.now();
-  await migrate(db, { migrationsFolder });
-  const end = Date.now();
+  try {
+    const start = Date.now();
+    await migrate(db, { migrationsFolder });
+    const end = Date.now();
 
-  console.log("Migrations completed in", (end - start) / 1000, "seconds");
+    console.log("✅ Migrations completed in", end - start, "ms");
+  } finally {
+    await connection.end();
+  }
 };
 
 runMigrate().catch((err) => {
-  console.error("Migration failed:", err);
+  console.error("❌ Migration failed");
+  console.error(err);
   process.exit(1);
 });

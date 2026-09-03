@@ -13,6 +13,7 @@ import { Chat } from "@/db/schema";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
 interface ApplicationError extends Error {
   info: string;
   status: number;
@@ -28,8 +29,10 @@ export const fetcher = async (url: string) => {
 
     error.info = await res.json();
     error.status = res.status;
+
     throw error;
   }
+
   return res.json();
 };
 
@@ -63,10 +66,16 @@ function addToolMessageToChat({
           const toolResult = toolMessage.content.find(
             (tool) => tool.toolCallId === toolInvocation.toolCallId,
           );
-          return {
-            ...toolInvocation,
-            result: toolResult?.result,
-          };
+
+          if (toolResult) {
+            return {
+              ...toolInvocation,
+              state: "result",
+              result: toolResult.result,
+            };
+          }
+
+          return toolInvocation;
         }),
       };
     }
@@ -85,8 +94,9 @@ export function convertToUIMessages(
         messages: chatMessages,
       });
     }
+
     let textContent = "";
-    let toolInvocations: Array<ToolInvocation> = [];
+    const toolInvocations: Array<ToolInvocation> = [];
 
     if (typeof message.content === "string") {
       textContent = message.content;
@@ -111,9 +121,11 @@ export function convertToUIMessages(
       content: textContent,
       toolInvocations,
     });
+
     return chatMessages;
   }, []);
 }
+
 export function getTitleFromChat(chat: Chat) {
   const messages = convertToUIMessages(chat.messages as Array<CoreMessage>);
   const firstMessage = messages[0];

@@ -6,7 +6,7 @@ export function AuthForm({
   children,
   defaultEmail = "",
 }: {
-  action: any;
+  action: (formData: FormData) => void | Promise<void>;
   children: React.ReactNode;
   defaultEmail?: string;
 }) {

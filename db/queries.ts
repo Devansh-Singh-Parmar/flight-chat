@@ -10,6 +10,9 @@ import { user, chat, User, reservation } from "./schema";
 
 config({ path: [".env.local", ".env"] });
 
+// Optionally, if not using email/pass login, you can
+// use the Drizzle adapter for Auth.js / NextAuth
+// https://authjs.dev/reference/adapter/drizzle
 const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 
 if (!databaseUrl) {
@@ -20,8 +23,8 @@ const connectionString = databaseUrl.includes("sslmode=")
   ? databaseUrl
   : `${databaseUrl}${databaseUrl.includes("?") ? "&" : "?"}sslmode=require`;
 
-let client = postgres(connectionString);
-let db = drizzle(client);
+const client = postgres(connectionString);
+const db = drizzle(client);
 
 export async function getUser(email: string): Promise<Array<User>> {
   try {
@@ -33,8 +36,8 @@ export async function getUser(email: string): Promise<Array<User>> {
 }
 
 export async function createUser(email: string, password: string) {
-  let salt = genSaltSync(10);
-  let hash = hashSync(password, salt);
+  const salt = genSaltSync(10);
+  const hash = hashSync(password, salt);
 
   try {
     return await db.insert(user).values({ email, password: hash });
@@ -50,7 +53,7 @@ export async function saveChat({
   userId,
 }: {
   id: string;
-  messages: any;
+  messages: unknown;
   userId: string;
 }) {
   try {
@@ -116,7 +119,7 @@ export async function createReservation({
 }: {
   id: string;
   userId: string;
-  details: any;
+  details: unknown;
 }) {
   return await db.insert(reservation).values({
     id,

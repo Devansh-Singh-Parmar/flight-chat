@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useChat } from "ai/react";
 import cx from "classnames";
 
@@ -86,14 +87,13 @@ export function SelectSeats({
         {availability.seats.map((row, index) => (
           <div key={`row-${index}`} className="flex flex-row gap-4">
             {row.map((seat, seatIndex) => (
-              <>
+              <React.Fragment key={seat.seatNumber}>
                 {seatIndex === 3 ? (
                   <div className="flex flex-row items-center justify-center w-full text-muted-foreground">
                     {index + 1}
                   </div>
                 ) : null}
                 <div
-                  key={seat.seatNumber}
                   onClick={() => {
                     append({
                       role: "user",
@@ -119,7 +119,7 @@ export function SelectSeats({
                     )}
                   />
                 </div>
-              </>
+              </React.Fragment>
             ))}
           </div>
         ))}

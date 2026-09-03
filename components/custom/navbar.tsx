@@ -15,7 +15,7 @@ import {
 } from "../ui/dropdown-menu";
 
 export const Navbar = async () => {
-  let session = await auth();
+  const session = await auth();
 
   return (
     <>
@@ -23,7 +23,13 @@ export const Navbar = async () => {
         <div className="flex flex-row gap-3 items-center">
           <History user={session?.user} />
           <div className="flex flex-row gap-2 items-center">
-            <Image src="/vercel.svg" height={20} width={20} alt="gemini logo" />
+            <Image
+              src="/vercel.svg"
+              height={20}
+              width={20}
+              style={{ width: 20, height: "auto" }}
+              alt="gemini logo"
+            />
             <div className="text-zinc-500">
               <SlashIcon size={16} />
             </div>

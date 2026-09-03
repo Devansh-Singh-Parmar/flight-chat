@@ -7,6 +7,7 @@ const SAMPLE = {
   flights: [
     {
       id: "result_1",
+      flightNumber: "UA184",
       departure: {
         cityName: "San Francisco",
         airportCode: "SFO",
@@ -23,6 +24,7 @@ const SAMPLE = {
     },
     {
       id: "result_2",
+      flightNumber: "BA142",
       departure: {
         cityName: "San Francisco",
         airportCode: "SFO",
@@ -39,6 +41,7 @@ const SAMPLE = {
     },
     {
       id: "result_3",
+      flightNumber: "DL401",
       departure: {
         cityName: "San Francisco",
         airportCode: "SFO",
@@ -55,6 +58,7 @@ const SAMPLE = {
     },
     {
       id: "result_4",
+      flightNumber: "AA207",
       departure: {
         cityName: "San Francisco",
         airportCode: "SFO",
@@ -95,7 +99,7 @@ export function ListFlights({
           onClick={() => {
             append({
               role: "user",
-              content: `I would like to book the ${flight.airlines} one!`,
+              content: `I would like to book flight ${flight.flightNumber} operated by ${flight.airlines.join(", ")}!`,
             });
           }}
         >
@@ -110,7 +114,9 @@ export function ListFlights({
               </div>
             </div>
             <div className="text w-fit hidden sm:flex text-sm text-muted-foreground flex-row gap-2">
-              <div>{flight.airlines.join(", ")}</div>
+              <div>
+                {flight.flightNumber} · {flight.airlines.join(", ")}
+              </div>
             </div>
             <div className="text sm:hidden text-xs sm:text-sm text-muted-foreground flex flex-row gap-2">
               {flight.airlines.length} stops
