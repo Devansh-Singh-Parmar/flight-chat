@@ -59,9 +59,11 @@ export function SelectSeats({
   chatId,
   availability = SAMPLE,
   append,
+  isLoading,
 }: {
   chatId: string;
   availability?: typeof SAMPLE;
+  isLoading: boolean;
   append: (
     message: Message | CreateMessage,
     options?: ChatRequestOptions,
@@ -94,6 +96,7 @@ export function SelectSeats({
                 ) : null}
                 <div
                   onClick={() => {
+                    if (!seat.isAvailable || isLoading) return;
                     append({
                       role: "user",
                       content: `I'd like to go with seat ${seat.seatNumber}`,

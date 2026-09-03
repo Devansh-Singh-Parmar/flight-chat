@@ -29,12 +29,14 @@ export const Message = ({
   toolInvocations,
   attachments,
   append,
+  isLoading,
 }: {
   chatId: string;
   role: string;
   content: string | ReactNode;
   toolInvocations: Array<ToolInvocation> | undefined;
   attachments?: Array<Attachment>;
+  isLoading: boolean;
   append: (
     message: AIMessage | CreateMessage,
     options?: ChatRequestOptions,
@@ -71,12 +73,14 @@ export const Message = ({
                       chatId={chatId}
                       results={result}
                       append={append}
+                      isLoading={isLoading}
                     />
                   ) : toolName === "selectSeats" ? (
                     <SelectSeats
                       chatId={chatId}
                       availability={result}
                       append={append}
+                      isLoading={isLoading}
                     />
                   ) : toolName === "createReservation" ? (
                     Object.keys(result).includes("error") ? null : (

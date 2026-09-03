@@ -17,13 +17,17 @@ export function Chat({
   id: string;
   initialMessages: Array<Message>;
 }) {
+  const [chatId] = useState(id);
+  const [chatError, setChatError] = useState<string | null>(null);
   const { messages, input, setInput, append, isLoading, stop } = useChat({
-    id,
-    body: { id },
+    id: chatId,
+    body: { id: chatId },
     initialMessages,
     maxSteps: 10,
+    onResponse: () => setChatError(null),
+    onError: (error) => setChatError(error.message),
     onFinish: () => {
-      window.history.replaceState({}, "", `/chat/${id}`);
+      window.history.replaceState({}, "", `/chat/${chatId}`);
     },
   });
 
@@ -44,12 +48,13 @@ export function Chat({
           {messages.map((message) => (
             <PreviewMessage
               key={message.id}
-              chatId={id}
+              chatId={chatId}
               role={message.role}
               content={message.content}
               attachments={message.experimental_attachments}
               toolInvocations={message.toolInvocations}
               append={append}
+              isLoading={isLoading}
             />
           ))}
 
@@ -57,6 +62,11 @@ export function Chat({
             ref={messagesEndRef}
             className="shrink-0 min-w-[24px] min-h-[24px]"
           />
+          {chatError ? (
+            <p className="text-sm text-red-500" role="alert">
+              {chatError}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex flex-row gap-2 relative items-end w-full md:max-w-[500px] max-w-[calc(100dvw-32px) px-4 md:px-0">

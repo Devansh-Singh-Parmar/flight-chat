@@ -81,9 +81,11 @@ export function ListFlights({
   chatId,
   results = SAMPLE,
   append,
+  isLoading,
 }: {
   chatId: string;
   results?: typeof SAMPLE;
+  isLoading: boolean;
   append: (
     message: Message | CreateMessage,
     options?: ChatRequestOptions,
@@ -96,6 +98,7 @@ export function ListFlights({
           key={flight.id}
           className="cursor-pointer flex flex-row border-b dark:border-zinc-700 py-2 last-of-type:border-none group"
           onClick={() => {
+            if (isLoading) return;
             append({
               role: "user",
               content: `I would like to book flight ${flight.flightNumber} operated by ${flight.airlines.join(", ")}!`,
