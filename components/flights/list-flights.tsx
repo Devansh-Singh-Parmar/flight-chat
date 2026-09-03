@@ -1,6 +1,6 @@
 "use client";
 
-import { useChat } from "ai/react";
+import type { ChatRequestOptions, CreateMessage, Message } from "ai";
 import { differenceInHours, format } from "date-fns";
 
 const SAMPLE = {
@@ -80,16 +80,15 @@ const SAMPLE = {
 export function ListFlights({
   chatId,
   results = SAMPLE,
+  append,
 }: {
   chatId: string;
   results?: typeof SAMPLE;
+  append: (
+    message: Message | CreateMessage,
+    options?: ChatRequestOptions,
+  ) => Promise<string | null | undefined>;
 }) {
-  const { append } = useChat({
-    id: chatId,
-    body: { id: chatId },
-    maxSteps: 5,
-  });
-
   return (
     <div className="rounded-lg bg-muted px-4 py-1.5 flex flex-col">
       {results.flights.map((flight) => (

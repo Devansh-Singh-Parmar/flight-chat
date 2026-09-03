@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useChat } from "ai/react";
+import type { ChatRequestOptions, CreateMessage, Message } from "ai";
 import cx from "classnames";
 
 interface Seat {
@@ -58,16 +58,15 @@ const SAMPLE: { seats: Seat[][] } = {
 export function SelectSeats({
   chatId,
   availability = SAMPLE,
+  append,
 }: {
   chatId: string;
   availability?: typeof SAMPLE;
+  append: (
+    message: Message | CreateMessage,
+    options?: ChatRequestOptions,
+  ) => Promise<string | null | undefined>;
 }) {
-  const { append } = useChat({
-    id: chatId,
-    body: { id: chatId },
-    maxSteps: 5,
-  });
-
   return (
     <div className="flex flex-col gap-2 bg-muted rounded-lg">
       <div className="flex flex-col gap-4 scale-75">
