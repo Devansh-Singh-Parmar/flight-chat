@@ -23,7 +23,20 @@ export function Chat({
     id: chatId,
     body: { id: chatId },
     initialMessages,
-    maxSteps: 10,
+    maxSteps: 3,
+    fetch: async (input, init) => {
+      const controller = new AbortController();
+      const onAbort = () => controller.abort();
+      init?.signal?.addEventListener("abort", onAbort, { once: true });
+      const timeout = window.setTimeout(() => controller.abort(), 35_000);
+
+      try {
+        return await fetch(input, { ...init, signal: controller.signal });
+      } finally {
+        window.clearTimeout(timeout);
+        init?.signal?.removeEventListener("abort", onAbort);
+      }
+    },
     onResponse: () => setChatError(null),
     onError: (error) => setChatError(error.message),
     onFinish: () => {

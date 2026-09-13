@@ -2,7 +2,7 @@ import "server-only";
 
 import { config } from "dotenv";
 import { genSaltSync, hashSync } from "bcrypt-ts";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
@@ -28,7 +28,10 @@ const db = drizzle(client);
 
 export async function getUser(email: string): Promise<Array<User>> {
   try {
-    return await db.select().from(user).where(eq(user.email, email));
+    return await db
+      .select()
+      .from(user)
+      .where(eq(sql`lower(${user.email})`, email.toLowerCase()));
   } catch (error) {
     console.error("Failed to get user from database", error);
     throw error;

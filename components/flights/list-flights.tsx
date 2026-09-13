@@ -3,88 +3,26 @@
 import type { ChatRequestOptions, CreateMessage, Message } from "ai";
 import { differenceInHours, format } from "date-fns";
 
-const SAMPLE = {
-  flights: [
-    {
-      id: "result_1",
-      flightNumber: "UA184",
-      departure: {
-        cityName: "San Francisco",
-        airportCode: "SFO",
-        timestamp: "2024-05-19T18:00:00Z",
-      },
-      arrival: {
-        cityName: "Rome",
-        airportCode: "FCO",
-        timestamp: "2024-05-20T14:30:00Z",
-      },
-      airlines: ["United Airlines", "Lufthansa"],
-      priceInUSD: 1200.5,
-      numberOfStops: 1,
-    },
-    {
-      id: "result_2",
-      flightNumber: "BA142",
-      departure: {
-        cityName: "San Francisco",
-        airportCode: "SFO",
-        timestamp: "2024-05-19T17:30:00Z",
-      },
-      arrival: {
-        cityName: "Rome",
-        airportCode: "FCO",
-        timestamp: "2024-05-20T15:00:00Z",
-      },
-      airlines: ["British Airways"],
-      priceInUSD: 1350,
-      numberOfStops: 0,
-    },
-    {
-      id: "result_3",
-      flightNumber: "DL401",
-      departure: {
-        cityName: "San Francisco",
-        airportCode: "SFO",
-        timestamp: "2024-05-19T19:15:00Z",
-      },
-      arrival: {
-        cityName: "Rome",
-        airportCode: "FCO",
-        timestamp: "2024-05-20T16:45:00Z",
-      },
-      airlines: ["Delta Air Lines", "Air France"],
-      priceInUSD: 1150.75,
-      numberOfStops: 1,
-    },
-    {
-      id: "result_4",
-      flightNumber: "AA207",
-      departure: {
-        cityName: "San Francisco",
-        airportCode: "SFO",
-        timestamp: "2024-05-19T16:30:00Z",
-      },
-      arrival: {
-        cityName: "Rome",
-        airportCode: "FCO",
-        timestamp: "2024-05-20T13:50:00Z",
-      },
-      airlines: ["American Airlines", "Iberia"],
-      totalDurationInMinutes: 740,
-      priceInUSD: 1250.25,
-      numberOfStops: 1,
-    },
-  ],
+type FlightResults = {
+  flights: Array<{
+    id: string;
+    flightNumber: string;
+    departure: { airportCode: string; timestamp: string };
+    arrival: { airportCode: string; timestamp: string };
+    airlines: string[];
+    priceInUSD: number;
+    numberOfStops: number;
+  }>;
 };
 
 export function ListFlights({
   chatId,
-  results = SAMPLE,
+  results,
   append,
   isLoading,
 }: {
   chatId: string;
-  results?: typeof SAMPLE;
+  results: FlightResults;
   isLoading: boolean;
   append: (
     message: Message | CreateMessage,
@@ -93,6 +31,11 @@ export function ListFlights({
 }) {
   return (
     <div className="rounded-lg bg-muted px-4 py-1.5 flex flex-col">
+      {results.flights.length === 0 ? (
+        <p className="py-3 text-sm text-muted-foreground">
+          No fully verified public fares were found for this route and date.
+        </p>
+      ) : null}
       {results.flights.map((flight) => (
         <div
           key={flight.id}

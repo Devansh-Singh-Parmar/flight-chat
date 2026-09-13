@@ -2,28 +2,34 @@ import { differenceInHours, format } from "date-fns";
 
 import { ArrowUpRightSmallIcon } from "../custom/icons";
 
-const SAMPLE = {
-  flightNumber: "BA142",
+type FlightStatusData = {
+  flightNumber: string;
   departure: {
-    cityName: "London",
-    airportCode: "LHR",
-    airportName: "London Heathrow Airport",
-    timestamp: "2024-10-08T18:30:00Z",
-    terminal: "5",
-    gate: "A10",
-  },
+    cityName: string;
+    airportCode: string;
+    airportName: string;
+    timestamp: string;
+    terminal: string;
+    gate: string;
+  };
   arrival: {
-    cityName: "New York",
-    airportCode: "JFK",
-    airportName: "John F. Kennedy International Airport",
-    timestamp: "2024-10-09T07:30:00Z",
-    terminal: "7",
-    gate: "B22",
-  },
-  totalDistanceInMiles: 3450,
+    cityName: string;
+    airportCode: string;
+    airportName: string;
+    timestamp: string;
+    terminal: string;
+    gate: string;
+  };
+  totalDistanceInMiles: number;
 };
 
-export function Row({ row = SAMPLE.arrival, type = "arrival" }) {
+export function Row({
+  row,
+  type,
+}: {
+  row: FlightStatusData["arrival"];
+  type: "arrival" | "departure";
+}) {
   return (
     <div className="flex flex-row justify-between">
       <div className="flex flex-row">
@@ -65,7 +71,15 @@ export function Row({ row = SAMPLE.arrival, type = "arrival" }) {
   );
 }
 
-export function FlightStatus({ flightStatus = SAMPLE }) {
+export function FlightStatus({
+  flightStatus,
+}: {
+  flightStatus?: FlightStatusData;
+}) {
+  if (!flightStatus) {
+    return <div className="skeleton h-44 rounded-lg bg-muted" />;
+  }
+
   return (
     <div className="flex flex-col gap-2 bg-muted rounded-lg p-4">
       <div className="flex flex-col gap-1 text-sm">

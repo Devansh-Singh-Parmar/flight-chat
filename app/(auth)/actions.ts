@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { AuthError } from "next-auth";
 
 import { createUser, getUser } from "@/db/queries";
 
@@ -19,26 +20,35 @@ export const login = async (
   _: LoginActionState,
   formData: FormData,
 ): Promise<LoginActionState> => {
+  let validatedData: z.infer<typeof authFormSchema>;
+
   try {
-    const validatedData = authFormSchema.parse({
+    validatedData = authFormSchema.parse({
       email: formData.get("email"),
       password: formData.get("password"),
     });
-
-    await signIn("credentials", {
-      email: validatedData.email,
-      password: validatedData.password,
-      redirect: false,
-    });
-
-    return { status: "success" };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { status: "invalid_data" };
     }
-
     return { status: "failed" };
   }
+
+  try {
+    await signIn("credentials", {
+      email: validatedData.email.trim().toLowerCase(),
+      password: validatedData.password,
+      redirectTo: "/",
+    });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return { status: "failed" };
+    }
+
+    throw error;
+  }
+
+  return { status: "success" };
 };
 
 export interface RegisterActionState {
@@ -55,32 +65,42 @@ export const register = async (
   _: RegisterActionState,
   formData: FormData,
 ): Promise<RegisterActionState> => {
+  let validatedData: z.infer<typeof authFormSchema>;
+
   try {
-    const validatedData = authFormSchema.parse({
+    validatedData = authFormSchema.parse({
       email: formData.get("email"),
       password: formData.get("password"),
     });
-
-    const [user] = await getUser(validatedData.email);
-
-    if (user) {
-      return { status: "user_exists" } as RegisterActionState;
-    } else {
-      await createUser(validatedData.email, validatedData.password);
-      await signIn("credentials", {
-        email: validatedData.email,
-        password: validatedData.password,
-        redirect: false,
-      });
-
-      return { status: "success" };
-    }
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { status: "invalid_data" };
     }
-
-    console.error("Registration failed", error);
     return { status: "failed" };
   }
+
+  const email = validatedData.email.trim().toLowerCase();
+  const [user] = await getUser(email);
+
+  if (user) {
+    return { status: "user_exists" };
+  }
+
+  await createUser(email, validatedData.password);
+
+  try {
+    await signIn("credentials", {
+      email,
+      password: validatedData.password,
+      redirectTo: "/",
+    });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return { status: "failed" };
+    }
+
+    throw error;
+  }
+
+  return { status: "success" };
 };

@@ -67,7 +67,13 @@ export const Message = ({
                   {toolName === "getWeather" ? (
                     <Weather weatherAtLocation={result} />
                   ) : toolName === "displayFlightStatus" ? (
-                    <FlightStatus flightStatus={result} />
+                    result.available === false ? (
+                      <p className="text-sm text-muted-foreground">
+                        No complete, verified status is currently available for that flight.
+                      </p>
+                    ) : (
+                      <FlightStatus flightStatus={result} />
+                    )
                   ) : toolName === "searchFlights" ? (
                     <ListFlights
                       chatId={chatId}
