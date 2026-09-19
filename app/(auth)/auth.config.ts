@@ -1,6 +1,7 @@
 import { NextAuthConfig } from "next-auth";
 
 export const authConfig = {
+  trustHost: true,
   pages: {
     signIn: "/login",
     newUser: "/",
@@ -12,28 +13,24 @@ export const authConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isOnChat = nextUrl.pathname.startsWith("/");
       const isOnRegister = nextUrl.pathname.startsWith("/register");
       const isOnLogin = nextUrl.pathname.startsWith("/login");
+      const isOnAuthApi = nextUrl.pathname.startsWith("/api/auth");
+
+      if (isOnAuthApi) {
+        return true;
+      }
 
       if (isLoggedIn && (isOnLogin || isOnRegister)) {
         return Response.redirect(new URL("/", nextUrl));
       }
 
       if (isOnRegister || isOnLogin) {
-        return true; // Always allow access to register and login pages
+        return true;
       }
 
-      if (isOnChat) {
-        if (isLoggedIn) return true;
-        return false; // Redirect unauthenticated users to login page
-      }
-
-      if (isLoggedIn) {
-        return Response.redirect(new URL("/", nextUrl));
-      }
-
-      return true;
+      if (isLoggedIn) return true;
+      return false;
     },
   },
 } satisfies NextAuthConfig;

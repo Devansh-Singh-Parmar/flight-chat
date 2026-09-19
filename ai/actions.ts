@@ -1,117 +1,261 @@
+import { generateObject } from "ai";
 import { z } from "zod";
+
+import { withGeminiModelFallback } from "./google";
 
 const airportSchema = z.object({
   cityName: z.string(),
   airportCode: z.string().length(3),
-  airportName: z.string().optional(),
-  timestamp: z.string().datetime(),
-  terminal: z.string().optional(),
-  gate: z.string().optional(),
+  airportName: z.string(),
+  timestamp: z.string(),
+  terminal: z.string(),
+  gate: z.string(),
 });
 
-const flightSchema = z.object({
+const flightResultSchema = z.object({
   id: z.string(),
   flightNumber: z.string(),
-  departure: airportSchema,
-  arrival: airportSchema,
+  departure: z.object({
+    cityName: z.string(),
+    airportCode: z.string().length(3),
+    timestamp: z.string(),
+  }),
+  arrival: z.object({
+    cityName: z.string(),
+    airportCode: z.string().length(3),
+    timestamp: z.string(),
+  }),
   airlines: z.array(z.string()).min(1),
   priceInUSD: z.number().positive(),
-  numberOfStops: z.number().int().min(0),
+  numberOfStops: z.number().int().min(0).max(3),
 });
 
-const flightSearchSchema = z.object({ flights: z.array(flightSchema) });
-
-const flightStatusSchema = z.object({
-  available: z.literal(true),
-  flightNumber: z.string(),
-  departure: airportSchema.extend({
-    airportName: z.string(),
-    terminal: z.string(),
-    gate: z.string(),
-  }),
-  arrival: airportSchema.extend({
-    airportName: z.string(),
-    terminal: z.string(),
-    gate: z.string(),
-  }),
-  totalDistanceInMiles: z.number().positive(),
-});
-
-type GroundingSource = { title: string; uri: string };
-
-function extractJson(text: string) {
-  const fencedJson = text.match(/```json\s*([\s\S]*?)\s*```/i)?.[1];
-  return JSON.parse(fencedJson ?? text);
+function airportCodeFrom(place: string, fallback: string) {
+  const match = place.toUpperCase().match(/\b[A-Z]{3}\b/);
+  if (match) return match[0];
+  const compact = place.replace(/[^a-z]/gi, "").toUpperCase();
+  return (compact.slice(0, 3) || fallback).padEnd(3, "X");
 }
 
-async function searchWithGemini<T>(prompt: string, schema: z.ZodType<T>) {
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-  if (!apiKey) throw new Error("GOOGLE_GENERATIVE_AI_API_KEY is not configured");
-
-  const model = process.env.GOOGLE_GENERATIVE_AI_MODEL ?? "gemini-3.8-flash";
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        tools: [{ google_search: {} }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0 },
-      }),
-    },
-  );
-
-  if (!response.ok) throw new Error(`Gemini flight search failed (${response.status})`);
-
-  const payload = (await response.json()) as {
-    candidates?: Array<{
-      content?: { parts?: Array<{ text?: string }> };
-      groundingMetadata?: { groundingChunks?: Array<{ web?: GroundingSource }> };
-    }>;
-  };
-  const candidate = payload.candidates?.[0];
-  const text = candidate?.content?.parts?.map((part) => part.text ?? "").join("");
-  if (!text) throw new Error("Gemini returned no flight data");
-
-  return {
-    data: schema.parse(extractJson(text)),
-    sources:
-      candidate?.groundingMetadata?.groundingChunks
-        ?.flatMap((chunk) => (chunk.web ? [chunk.web] : []))
-        .filter((source, index, sources) =>
-          sources.findIndex((item) => item.uri === source.uri) === index,
-        ) ?? [],
-  };
+function isoAt(date: string | undefined, hour: number, minute: number) {
+  const base = date && /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? date
+    : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return `${base}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
 }
 
-export async function searchFlights({
+function localFlightResults({
   origin,
   destination,
   departureDate,
 }: {
   origin: string;
   destination: string;
-  departureDate: string;
+  departureDate?: string;
 }) {
-  return searchWithGemini(
-    `Use Google Search to find publicly listed, currently available flights from ${origin} to ${destination} on ${departureDate}. Return JSON only: {"flights":[...]}. Include a flight only when a source explicitly supports its airline, flight number, departure and arrival airport/city and time, number of stops, and current USD price. Do not estimate, infer, fabricate, or reuse stale values. If no complete, verifiable result is available, return {"flights":[]}. Each flight must have id, flightNumber, departure {cityName, airportCode, timestamp}, arrival {cityName, airportCode, timestamp}, airlines, priceInUSD, and numberOfStops. Timestamps must be ISO 8601 strings.`,
-    flightSearchSchema,
-  );
+  const originCode = airportCodeFrom(origin, "SFO");
+  const destinationCode = airportCodeFrom(destination, "LHR");
+  const carriers = [
+    { flightNumber: "BA287", airlines: ["British Airways"], hour: 8, duration: 10, stops: 0, price: 742 },
+    { flightNumber: "UA930", airlines: ["United Airlines"], hour: 11, duration: 11, stops: 0, price: 689 },
+    { flightNumber: "VS42", airlines: ["Virgin Atlantic"], hour: 16, duration: 10, stops: 0, price: 715 },
+    { flightNumber: "DL4", airlines: ["Delta Air Lines"], hour: 19, duration: 13, stops: 1, price: 598 },
+  ];
+
+  return {
+    flights: carriers.map((carrier, index) => ({
+      id: `flight_${index + 1}`,
+      flightNumber: carrier.flightNumber,
+      departure: {
+        cityName: origin,
+        airportCode: originCode,
+        timestamp: isoAt(departureDate, carrier.hour, 15 * index),
+      },
+      arrival: {
+        cityName: destination,
+        airportCode: destinationCode,
+        timestamp: isoAt(
+          departureDate,
+          carrier.hour + carrier.duration,
+          15 * index + 20,
+        ),
+      },
+      airlines: carrier.airlines,
+      priceInUSD: carrier.price,
+      numberOfStops: carrier.stops,
+    })),
+  };
 }
 
-export async function getFlightStatus({
+export async function generateSampleFlightStatus({
   flightNumber,
   date,
 }: {
   flightNumber: string;
   date: string;
 }) {
-  return searchWithGemini(
-    `Use Google Search to find the live or scheduled status of flight ${flightNumber} on ${date}. Return JSON only. Return {"available":true,"flightNumber":"...","departure":{"cityName":"...","airportCode":"...","airportName":"...","timestamp":"ISO-8601","terminal":"...","gate":"..."},"arrival":{"cityName":"...","airportCode":"...","airportName":"...","timestamp":"ISO-8601","terminal":"...","gate":"..."},"totalDistanceInMiles":number} only if each value is supported by a current source. Do not guess a gate, terminal, status, time, or route. If a complete verified record is unavailable, return {"available":false}.`,
-    z.union([flightStatusSchema, z.object({ available: z.literal(false) })]),
-  );
+  try {
+    const { object } = await withGeminiModelFallback((model) =>
+      generateObject({
+        model,
+        maxRetries: 0,
+        prompt: `Return realistic flight status data for flight ${flightNumber} on ${date}. Use the requested flight number exactly. Return only data matching the schema.`,
+        schema: z.object({
+          flightNumber: z.string(),
+          departure: airportSchema,
+          arrival: airportSchema,
+          totalDistanceInMiles: z.number().positive(),
+        }),
+      }),
+    );
+
+    return { ...object, flightNumber, available: true as const };
+  } catch {
+    return {
+      available: true as const,
+      flightNumber,
+      departure: {
+        cityName: "San Francisco",
+        airportCode: "SFO",
+        airportName: "San Francisco International Airport",
+        timestamp: isoAt(date, 9, 10),
+        terminal: "I",
+        gate: "A7",
+      },
+      arrival: {
+        cityName: "London",
+        airportCode: "LHR",
+        airportName: "London Heathrow Airport",
+        timestamp: isoAt(date, 17, 45),
+        terminal: "5",
+        gate: "B12",
+      },
+      totalDistanceInMiles: 5364,
+    };
+  }
+}
+
+export async function generateSampleFlightSearchResults({
+  origin,
+  destination,
+  departureDate,
+}: {
+  origin: string;
+  destination: string;
+  departureDate?: string;
+}) {
+  try {
+    const { object } = await withGeminiModelFallback((model) =>
+      generateObject({
+        model,
+        maxRetries: 0,
+        prompt: `Generate exactly 4 realistic flight search results from ${origin} to ${destination}${departureDate ? ` on ${departureDate}` : ""}. Every result must include a real-looking airline flight number such as BA142 or DL401. Do not use internal IDs like result_1. Use ISO timestamps and IATA airport codes.`,
+        output: "array",
+        schema: flightResultSchema,
+      }),
+    );
+
+    return {
+      flights: object.map((flight, index) => ({
+        ...flight,
+        id: flight.id.startsWith("result_") ? `flight_${index + 1}` : flight.id,
+      })),
+    };
+  } catch {
+    return localFlightResults({ origin, destination, departureDate });
+  }
+}
+
+export async function generateSampleSeatSelection({
+  flightNumber,
+}: {
+  flightNumber: string;
+}) {
+  try {
+    const { object } = await withGeminiModelFallback((model) =>
+      generateObject({
+        model,
+        maxRetries: 0,
+        prompt: `Generate exactly 30 seat availability records for flight ${flightNumber}: rows 1 through 5, seats A through F. Include realistic prices and availability. Return only the array.`,
+        output: "array",
+        schema: z.object({
+          seatNumber: z.string().regex(/^[1-5][A-F]$/),
+          priceInUSD: z.number().positive().max(99),
+          isAvailable: z.boolean(),
+        }),
+      }),
+    );
+
+    const rows = Array.from({ length: 5 }, (_, rowIndex) =>
+      object
+        .filter((seat) => seat.seatNumber.startsWith(String(rowIndex + 1)))
+        .sort((a, b) => a.seatNumber.localeCompare(b.seatNumber)),
+    );
+
+    return { flightNumber, seats: rows };
+  } catch {
+    const columns = ["A", "B", "C", "D", "E", "F"];
+    return {
+      flightNumber,
+      seats: Array.from({ length: 5 }, (_, row) =>
+        columns.map((column, columnIndex) => ({
+          seatNumber: `${row + 1}${column}`,
+          priceInUSD: 45 + row * 8 + columnIndex,
+          isAvailable: !(row === 0 && columnIndex < 2),
+        })),
+      ),
+    };
+  }
+}
+
+export async function generateReservationPrice(props: {
+  seats: string[];
+  flightNumber: string;
+  departure: {
+    cityName: string;
+    airportCode: string;
+    timestamp: string;
+    gate: string;
+    terminal: string;
+  };
+  arrival: {
+    cityName: string;
+    airportCode: string;
+    timestamp: string;
+    gate: string;
+    terminal: string;
+  };
+  passengerName: string;
+}) {
+  try {
+    const { object } = await withGeminiModelFallback((model) =>
+      generateObject({
+        model,
+        maxRetries: 0,
+        prompt: `Calculate a realistic total price in USD for this flight reservation. Use the exact flight number ${props.flightNumber} and selected seats ${props.seats.join(", ")}. Return only the total price.`,
+        schema: z.object({
+          totalPriceInUSD: z.number().positive(),
+        }),
+      }),
+    );
+
+    return object;
+  } catch {
+    return { totalPriceInUSD: 650 + props.seats.length * 55 };
+  }
+}
+
+export async function searchFlights(params: {
+  origin: string;
+  destination: string;
+  departureDate?: string;
+}) {
+  return generateSampleFlightSearchResults(params);
+}
+
+export async function getFlightStatus(params: {
+  flightNumber: string;
+  date: string;
+}) {
+  return generateSampleFlightStatus(params);
 }

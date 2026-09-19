@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { AuthError } from "next-auth";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 import { createUser, getUser } from "@/db/queries";
 
@@ -41,6 +42,9 @@ export const login = async (
       redirectTo: "/",
     });
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
     if (error instanceof AuthError) {
       return { status: "failed" };
     }
@@ -95,6 +99,9 @@ export const register = async (
       redirectTo: "/",
     });
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
     if (error instanceof AuthError) {
       return { status: "failed" };
     }

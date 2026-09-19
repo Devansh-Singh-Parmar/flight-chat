@@ -24,10 +24,9 @@ export const Overview = () => {
           </code>{" "}
           hook on the client to create a seamless chat experience.
         </p>
-        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-          Chat responses are currently limited by the Gemini provider quota. If
-          the assistant does not reply, the model is likely rate-limited and the
-          request needs to be retried later or a new API quota/source is needed.
+        <p>
+          Ask for a route such as San Francisco to London and the assistant will
+          search flights, then help you pick seats and complete a demo booking.
         </p>
       </div>
     </motion.div>

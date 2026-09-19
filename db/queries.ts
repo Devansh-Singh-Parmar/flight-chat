@@ -19,11 +19,22 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL or POSTGRES_URL is not defined");
 }
 
-const connectionString = databaseUrl.includes("sslmode=")
-  ? databaseUrl
-  : `${databaseUrl}${databaseUrl.includes("?") ? "&" : "?"}sslmode=require`;
+function neonConnectionString(databaseUrl: string) {
+  const url = new URL(databaseUrl);
+  url.searchParams.set("sslmode", "require");
+  url.searchParams.delete("channel_binding");
+  return url.toString();
+}
 
-const client = postgres(connectionString);
+const connectionString = neonConnectionString(databaseUrl);
+
+const client = postgres(connectionString, {
+  max: 5,
+  idle_timeout: 20,
+  connect_timeout: 10,
+  prepare: false,
+  ssl: "require",
+});
 const db = drizzle(client);
 
 export async function getUser(email: string): Promise<Array<User>> {

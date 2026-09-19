@@ -1,18 +1,50 @@
-import { convertToCoreMessages, Message, streamText } from "ai";
+import { CoreMessage, Message, streamText } from "ai";
 import { z } from "zod";
 
 import { geminiProModel } from "@/ai";
 import {
-  getFlightStatus,
-  searchFlights,
+  generateReservationPrice,
+  generateSampleFlightSearchResults,
+  generateSampleFlightStatus,
+  generateSampleSeatSelection,
 } from "@/ai/actions";
 import { auth } from "@/app/(auth)/auth";
 import {
+  createReservation,
   deleteChatById,
   getChatById,
   getReservationById,
   saveChat,
 } from "@/db/queries";
+import { generateUUID } from "@/lib/utils";
+
+function toGeminiSafeMessages(messages: Array<Message>): Array<CoreMessage> {
+  return messages.flatMap((message) => {
+    if (message.role === "user") {
+      const content =
+        typeof message.content === "string" ? message.content.trim() : "";
+      return content.length > 0 ? [{ role: "user" as const, content }] : [];
+    }
+
+    const parts: string[] = [];
+    if (typeof message.content === "string" && message.content.trim()) {
+      parts.push(message.content.trim());
+    }
+
+    for (const invocation of message.toolInvocations ?? []) {
+      if (invocation.state === "result") {
+        parts.push(
+          `Shown the ${invocation.toolName} result in the UI. Continue the booking flow from there.`,
+        );
+      }
+    }
+
+    return parts.length > 0
+      ? [{ role: "assistant" as const, content: parts.join(" ") }]
+      : [];
+  });
+}
+
 
 export async function POST(request: Request) {
   const { id, messages }: { id: string; messages: Array<Message> } =
@@ -24,32 +56,37 @@ export async function POST(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const coreMessages = convertToCoreMessages(messages).filter(
-    (message) => message.content.length > 0,
-  );
+  const coreMessages = toGeminiSafeMessages(messages);
 
   const abortSignal = AbortSignal.any([
     request.signal,
-    AbortSignal.timeout(30_000),
+    AbortSignal.timeout(90_000),
   ]);
 
   const result = await streamText({
     model: geminiProModel,
     system: `\n
-        - you help users find verified public flight information.
+        - you help users book flights!
         - keep your responses limited to a sentence.
         - DO NOT output lists.
         - after every tool call, pretend you're showing the result to the user and keep your response limited to a phrase.
         - today's date is ${new Date().toLocaleDateString()}.
-        - ask for a departure date before searching for flights.
-        - do not invent flight, price, availability, seat, booking, or payment data.
-        - explain that booking, seats, and payment require an airline or GDS connection.
+        - ask follow up questions to nudge user into the optimal flow
+        - ask for any details you don't know, like name of passenger, etc.
+        - if the user does not provide a date, search using a date about one week from today
+        - C and D are aisle seats, A and F are window seats, B and E are middle seats
+        - assume the most popular airports for the origin and destination
+        - here's the optimal flow
+          - search for flights
+          - choose flight
+          - select seats
+          - create reservation (ask user whether to proceed with payment or change reservation)
+          - authorize payment (requires user consent, wait for user to finish payment and let you know when done)
+          - display boarding pass (DO NOT display boarding pass without verifying payment)
       `,
     messages: coreMessages,
-    // Avoid retry storms and tool loops that otherwise keep the UI loading when
-    // a free-tier Gemini key is throttled or a model is unavailable.
-    maxRetries: 0,
-    maxSteps: 3,
+    maxRetries: 1,
+    maxSteps: 1,
     abortSignal,
     tools: {
       getWeather: {
@@ -74,12 +111,10 @@ export async function POST(request: Request) {
           date: z.string().describe("Date of the flight"),
         }),
         execute: async ({ flightNumber, date }) => {
-          const { data, sources } = await getFlightStatus({
+          return generateSampleFlightStatus({
             flightNumber,
             date,
           });
-
-          return { ...data, sources };
         },
       },
       searchFlights: {
@@ -87,16 +122,26 @@ export async function POST(request: Request) {
         parameters: z.object({
           origin: z.string().describe("Origin airport or city"),
           destination: z.string().describe("Destination airport or city"),
-          departureDate: z.string().describe("Departure date in YYYY-MM-DD format"),
+          departureDate: z
+            .string()
+            .optional()
+            .describe("Departure date in YYYY-MM-DD format"),
         }),
         execute: async ({ origin, destination, departureDate }) => {
-          const { data, sources } = await searchFlights({
+          return generateSampleFlightSearchResults({
             origin,
             destination,
             departureDate,
           });
-
-          return { ...data, sources };
+        },
+      },
+      selectSeats: {
+        description: "Select seats for a flight",
+        parameters: z.object({
+          flightNumber: z.string().describe("Flight number"),
+        }),
+        execute: async ({ flightNumber }) => {
+          return generateSampleSeatSelection({ flightNumber });
         },
       },
       createReservation: {
@@ -120,10 +165,23 @@ export async function POST(request: Request) {
           }),
           passengerName: z.string().describe("Name of the passenger"),
         }),
-        execute: async () => {
+        execute: async (props) => {
+          const { totalPriceInUSD } = await generateReservationPrice(props);
+          const currentSession = await auth();
+          const reservationId = generateUUID();
+
+          if (currentSession?.user?.id) {
+            await createReservation({
+              id: reservationId,
+              userId: currentSession.user.id,
+              details: { ...props, totalPriceInUSD },
+            });
+
+            return { id: reservationId, ...props, totalPriceInUSD };
+          }
+
           return {
-            error:
-              "Reservations are unavailable without a connected airline or GDS booking provider.",
+            error: "User is not signed in to perform this action!",
           };
         },
       },

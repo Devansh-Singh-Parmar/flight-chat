@@ -31,12 +31,12 @@ export function ListFlights({
 }) {
   return (
     <div className="rounded-lg bg-muted px-4 py-1.5 flex flex-col">
-      {results.flights.length === 0 ? (
+      {results.flights?.length === 0 ? (
         <p className="py-3 text-sm text-muted-foreground">
           No fully verified public fares were found for this route and date.
         </p>
       ) : null}
-      {results.flights.map((flight) => (
+      {(results.flights ?? []).map((flight) => (
         <div
           key={flight.id}
           className="cursor-pointer flex flex-row border-b dark:border-zinc-700 py-2 last-of-type:border-none group"
