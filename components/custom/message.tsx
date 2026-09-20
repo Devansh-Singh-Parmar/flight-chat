@@ -69,7 +69,8 @@ export const Message = ({
                   ) : toolName === "displayFlightStatus" ? (
                     result.available === false ? (
                       <p className="text-sm text-muted-foreground">
-                        No complete, verified status is currently available for that flight.
+                        No complete, verified status is currently available for
+                        that flight.
                       </p>
                     ) : (
                       <FlightStatus flightStatus={result} />
@@ -89,7 +90,9 @@ export const Message = ({
                       isLoading={isLoading}
                     />
                   ) : toolName === "createReservation" ? (
-                    Object.keys(result).includes("error") ? null : (
+                    Object.keys(result).includes("error") ? (
+                      <p className="text-sm text-red-500">{result.error}</p>
+                    ) : (
                       <CreateReservation reservation={result} />
                     )
                   ) : toolName === "authorizePayment" ? (

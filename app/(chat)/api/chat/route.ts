@@ -19,7 +19,7 @@ import {
 import { generateUUID } from "@/lib/utils";
 
 function toGeminiSafeMessages(messages: Array<Message>): Array<CoreMessage> {
-  return messages.flatMap((message) => {
+  return messages.flatMap((message): Array<CoreMessage> => {
     if (message.role === "user") {
       const content =
         typeof message.content === "string" ? message.content.trim() : "";
@@ -34,7 +34,7 @@ function toGeminiSafeMessages(messages: Array<Message>): Array<CoreMessage> {
     for (const invocation of message.toolInvocations ?? []) {
       if (invocation.state === "result") {
         parts.push(
-          `Shown the ${invocation.toolName} result in the UI. Continue the booking flow from there.`,
+          `The ${invocation.toolName} tool returned this result: ${JSON.stringify(invocation.result)}. Use exact IDs and values from this result when continuing the booking flow.`,
         );
       }
     }
@@ -44,7 +44,6 @@ function toGeminiSafeMessages(messages: Array<Message>): Array<CoreMessage> {
       : [];
   });
 }
-
 
 export async function POST(request: Request) {
   const { id, messages }: { id: string; messages: Array<Message> } =
@@ -171,11 +170,19 @@ export async function POST(request: Request) {
           const reservationId = generateUUID();
 
           if (currentSession?.user?.id) {
-            await createReservation({
-              id: reservationId,
-              userId: currentSession.user.id,
-              details: { ...props, totalPriceInUSD },
-            });
+            try {
+              await createReservation({
+                id: reservationId,
+                userId: currentSession.user.id,
+                details: { ...props, totalPriceInUSD },
+              });
+            } catch (error) {
+              console.error("Failed to create reservation", error);
+              return {
+                error:
+                  "We could not save the reservation because the database is temporarily unavailable. Please try again.",
+              };
+            }
 
             return { id: reservationId, ...props, totalPriceInUSD };
           }
@@ -269,12 +276,18 @@ export async function POST(request: Request) {
   return result.toDataStreamResponse({
     getErrorMessage: (error) => {
       console.error("Chat stream failed", error);
-      const message = error instanceof Error ? error.message : "Unknown provider error";
+      const message =
+        error instanceof Error ? error.message : "Unknown provider error";
       if (/429|quota|rate limit/i.test(message)) {
         return "The flight assistant is temporarily rate-limited. Please wait a moment and try again.";
       }
       if (/abort|timeout/i.test(message)) {
         return "The flight search took too long. Please try again.";
+      }
+      if (
+        /connect_timeout|econnrefused|database|postgres|neon/i.test(message)
+      ) {
+        return "The database is temporarily unavailable. Please try again in a moment.";
       }
       return "The flight search could not be completed. Please try again.";
     },
