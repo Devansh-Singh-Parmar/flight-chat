@@ -11,12 +11,14 @@ import { CheckCircle, InfoIcon } from "../custom/icons";
 import { Input } from "../ui/input";
 
 export function AuthorizePayment({
-  intent = { reservationId: "sample-uuid" },
+  intent,
 }: {
-  intent?: { reservationId: string };
+  intent?: { reservationId?: string };
 }) {
   const { data: reservation, mutate } = useSWR(
-    `/api/reservation?id=${intent.reservationId}`,
+    intent?.reservationId
+      ? `/api/reservation?id=${intent.reservationId}`
+      : null,
     fetcher,
   );
 
@@ -25,7 +27,7 @@ export function AuthorizePayment({
   const handleAuthorize = async (magicWord: string) => {
     try {
       const response = await fetch(
-        `/api/reservation?id=${intent.reservationId}`,
+        `/api/reservation?id=${intent?.reservationId}`,
         {
           method: "PATCH",
           headers: {
